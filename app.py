@@ -1,15 +1,10 @@
-# ============================================================
-#  Longman 3000 — English / Arabic Flashcard Game
-#  Full word list (A - Z) included below.
-#  Run:  python app.py
-# ============================================================
-
+import streamlit as st
 import random
 
-# ------------------------------------------------------------
-# 1) DATA  —  letters A - C
-# ------------------------------------------------------------
-DATA = """
+# ============================================================
+# 1) WORD LIST
+# ============================================================
+DEFAULT_DATA = """
 a (article)|أداة نكرة
 abandon|يتخلى عن
 ability|قدرة
@@ -474,12 +469,6 @@ career|مهنة
 careful|حذر
 carefully|بحذر
 carpet|سجادة
-"""
-
-# ------------------------------------------------------------
-# 2) DATA_CONTINUED  —  letters D - Z
-# ------------------------------------------------------------
-DATA_CONTINUED = """
 dad|أب
 daily|يومي
 damage|ضرر
@@ -2695,154 +2684,141 @@ zero|صفر
 zone|منطقة
 """
 
-# ------------------------------------------------------------
-# 3) Build the word list (A-Z combined)
-# ------------------------------------------------------------
-WORDS = [tuple(part.strip() for part in line.split("|"))
-         for line in (DATA + DATA_CONTINUED).strip().splitlines()
-         if line.strip()]
+QUESTIONS_PER_GAME = 10
 
-QUESTIONS_PER_GAME = 10          # every game = 10 cards
+# ============================================================
+# 2) Page Config & CSS
+# ============================================================
+st.set_page_config(page_title="Longman 3000 Flashcards", page_icon="📚", layout="centered")
 
-# ------------------------------------------------------------
-# 4) Game state
-# ------------------------------------------------------------
-deck = []          # the 10 cards of the current game
-q_index = 0        # which card we are on
-right = 0          # correct answers
-wrong_list = []    # (english, correct_arabic, what_user_chose)
-current_options = []
-current_answer = ""
-current_word = ""
-answered = False
+st.markdown("""
+<style>
+    .big-font { font-size:40px !important; font-weight: bold; text-align: center; margin-bottom: 30px;}
+</style>
+""", unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# 5) Window
-# ------------------------------------------------------------
-root = tk.Tk()
-root.title("Longman 3000 — بطاقات إنجليزية / عربية")
-root.geometry("600x520")
-root.resizable(False, False)
+# ============================================================
+# 3) Sidebar
+# ============================================================
+st.sidebar.title("Options")
+uploaded_file = st.sidebar.file_uploader("Upload full 3000 words (TXT)", type=["txt"])
+st.sidebar.info("Format your text file with one word per line:\n\nenglish|arabic")
 
-tk.Label(root, text="Longman Communication 3000",
-         font=("Arial", 16, "bold")).pack(pady=(10, 0))
+if uploaded_file is not None:
+    raw_text = uploaded_file.getvalue().decode("utf-8")
+    WORDS = [tuple(part.strip() for part in line.split("|"))
+             for line in raw_text.strip().splitlines() if "|" in line]
+    st.sidebar.success(f"Loaded {len(WORDS)} words from file!")
+else:
+    WORDS = [tuple(part.strip() for part in line.split("|"))
+             for line in DEFAULT_DATA.strip().splitlines() if "|" in line]
+    st.sidebar.warning(f"Using built-in list ({len(WORDS)} words).")
 
-info_lbl = tk.Label(root, text="", font=("Arial", 11))
-info_lbl.pack(pady=4)
+# ============================================================
+# 4) Session State Initialization
+# ============================================================
+if 'deck' not in st.session_state:
+    st.session_state.deck = []
+if 'q_index' not in st.session_state:
+    st.session_state.q_index = 0
+if 'score' not in st.session_state:
+    st.session_state.score = 0
+if 'wrong_list' not in st.session_state:
+    st.session_state.wrong_list = []
+if 'answered' not in st.session_state:
+    st.session_state.answered = False
+if 'current_options' not in st.session_state:
+    st.session_state.current_options = []
+if 'user_choice' not in st.session_state:
+    st.session_state.user_choice = ""
 
-word_lbl = tk.Label(root, text="", font=("Arial", 28, "bold"), fg="#1a4f8a")
-word_lbl.pack(pady=18)
+# ============================================================
+# 5) Game Logic
+# ============================================================
+def start_new_game():
+    st.session_state.deck = random.sample(WORDS, QUESTIONS_PER_GAME)
+    st.session_state.q_index = 0
+    st.session_state.score = 0
+    st.session_state.wrong_list = []
+    st.session_state.answered = False
+    st.session_state.current_options = []
+    st.session_state.user_choice = ""
+    st.rerun()
 
-feedback_lbl = tk.Label(root, text="", font=("Arial", 13, "bold"))
-feedback_lbl.pack()
-
-btn_frame = tk.Frame(root)
-btn_frame.pack(pady=10)
-
-option_buttons = []
-for i in range(4):
-    b = tk.Button(btn_frame, text="", width=28, height=2,
-                  font=("Arial", 13), cursor="hand2",
-                  command=lambda i=i: check_answer(i))
-    b.pack(pady=5)
-    option_buttons.append(b)
-
-next_btn = tk.Button(root, text="التالي ▶", width=18, height=2,
-                     font=("Arial", 12, "bold"), command=lambda: next_question())
-next_btn.pack(pady=10)
-
-# ------------------------------------------------------------
-# 6) Game logic
-# ------------------------------------------------------------
-def make_options(answer):
-    """3 random wrong Arabic meanings + the correct one."""
-    pool = list({ar for _, ar in WORDS if ar != answer})   # set = no duplicates
-    options = random.sample(pool, 3) + [answer]
+def generate_options(correct_answer):
+    pool = list({ar for _, ar in WORDS if ar != correct_answer})
+    if len(pool) < 3:
+        options = pool + [correct_answer]
+    else:
+        options = random.sample(pool, 3) + [correct_answer]
     random.shuffle(options)
     return options
 
+# ============================================================
+# 6) Main UI
+# ============================================================
+st.title("📚 Longman 3000 Flashcard Game")
 
-def show_question():
-    global current_options, current_answer, answered, current_word
+if not st.session_state.deck:
+    st.write("Welcome! Test your English/Arabic vocabulary.")
+    if st.button("🚀 Start Game", use_container_width=True):
+        start_new_game()
 
-    current_word, current_answer = deck[q_index]
-    current_options = make_options(current_answer)
-    answered = False
-
-    info_lbl.config(text=f"سؤال {q_index + 1} من {len(deck)}    |    "
-                         f"✔ صحيح: {right}    ✘ خطأ: {len(wrong_list)}")
-    word_lbl.config(text=current_word)
-    feedback_lbl.config(text="")
-    next_btn.config(state="disabled",
-                    text="عرض النتيجة" if q_index == len(deck) - 1 else "التالي ▶")
-
-    for i, b in enumerate(option_buttons):
-        b.config(text=current_options[i], state="normal",
-                 bg="SystemButtonFace", fg="black")
-
-
-def check_answer(i):
-    global answered, right, current_word
-
-    if answered:
-        return
-    answered = True
-
-    chosen = current_options[i]
-
-    # mark the correct button green
-    for j, b in enumerate(option_buttons):
-        b.config(state="disabled")
-        if current_options[j] == current_answer:
-            b.config(bg="#b6e3b6")
-
-    if chosen == current_answer:
-        right += 1
-        feedback_lbl.config(text="✔ إجابة صحيحة", fg="green")
+elif st.session_state.q_index >= len(st.session_state.deck):
+    st.header("🎉 Game Over!")
+    st.write(f"### Your Score: {st.session_state.score} / {len(st.session_state.deck)}")
+    
+    if st.session_state.wrong_list:
+        st.subheader("❌ Words to Review:")
+        for w, a in st.session_state.wrong_list:
+            st.write(f"- **{w}** = {a}")
     else:
-        wrong_list.append((current_word, current_answer, chosen))
-        option_buttons[i].config(bg="#f5b5b5")
-        feedback_lbl.config(text=f"✘ خطأ — الصحيح: {current_answer}", fg="red")
+        st.success("Perfect score! Excellent work! 🌟")
+        
+    if st.button("Play Again", use_container_width=True):
+        start_new_game()
 
-    info_lbl.config(text=f"سؤال {q_index + 1} من {len(deck)}    |    "
-                         f"✔ صحيح: {right}    ✘ خطأ: {len(wrong_list)}")
-    next_btn.config(state="normal")
+else:
+    current_word, current_answer = st.session_state.deck[st.session_state.q_index]
+    
+    if not st.session_state.current_options:
+        st.session_state.current_options = generate_options(current_answer)
 
-
-def next_question():
-    global q_index
-    q_index += 1
-    if q_index >= len(deck):
-        end_game()
+    progress_pct = st.session_state.q_index / len(st.session_state.deck)
+    st.progress(progress_pct, text=f"Question {st.session_state.q_index + 1} of {len(st.session_state.deck)}")
+    
+    col1, col2 = st.columns(2)
+    col1.metric("✅ Correct", st.session_state.score)
+    col2.metric("❌ Wrong", len(st.session_state.wrong_list))
+    
+    st.markdown("---")
+    st.markdown(f'<div class="big-font">Translate: {current_word}</div>', unsafe_allow_html=True)
+    
+    if not st.session_state.answered:
+        for opt in st.session_state.current_options:
+            if st.button(opt, use_container_width=True):
+                st.session_state.answered = True
+                st.session_state.user_choice = opt
+                
+                if opt == current_answer:
+                    st.session_state.score += 1
+                else:
+                    st.session_state.wrong_list.append((current_word, current_answer))
+                st.rerun()
+                
     else:
-        show_question()
-
-
-def end_game():
-    msg = (f"انتهت اللعبة!\n\n"
-           f"الإجابات الصحيحة: {right} من {len(deck)}\n"
-           f"الإجابات الخاطئة: {len(wrong_list)}\n")
-    if right == len(deck):
-        msg += "\nممتاز! كل الإجابات صحيحة 🎉"
-    if wrong_list:
-        msg += "\n\nالكلمات التي أخطأت فيها:\n"
-        for w, a, _ in wrong_list:
-            msg += f"• {w} = {a}\n"
-    messagebox.showinfo("النتيجة", msg)
-    start_game()
-
-
-def start_game():
-    global deck, q_index, right, wrong_list
-    deck = random.sample(WORDS, QUESTIONS_PER_GAME)   # 10 different cards
-    q_index = 0
-    right = 0
-    wrong_list = []
-    show_question()
-
-
-# ------------------------------------------------------------
-# 7) Go!
-# ------------------------------------------------------------
-start_game()
-root.mainloop()
+        for opt in st.session_state.current_options:
+            if opt == current_answer:
+                st.success(f"✅ {opt}")
+            elif opt == st.session_state.user_choice and opt != current_answer:
+                st.error(f"❌ {opt} (Your Choice)")
+            else:
+                st.button(opt, disabled=True, use_container_width=True)
+                
+        st.markdown("---")
+        if st.button("Next Question ➡️", use_container_width=True):
+            st.session_state.q_index += 1
+            st.session_state.answered = False
+            st.session_state.current_options = []
+            st.session_state.user_choice = ""
+            st.rerun()
