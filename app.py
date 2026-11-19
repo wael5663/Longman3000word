@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import time  # Added to create the automatic delay
 
 # ============================================================
 # 1) WORD LIST
@@ -2807,6 +2808,7 @@ else:
                 st.rerun()
                 
     else:
+        # Show the answers with colors
         for opt in st.session_state.current_options:
             if opt == current_answer:
                 st.success(f"✅ {opt}")
@@ -2814,11 +2816,12 @@ else:
                 st.error(f"❌ {opt} (Your Choice)")
             else:
                 st.button(opt, disabled=True, use_container_width=True)
-                
-        st.markdown("---")
-        if st.button("Next Question ➡️", use_container_width=True):
-            st.session_state.q_index += 1
-            st.session_state.answered = False
-            st.session_state.current_options = []
-            st.session_state.user_choice = ""
-            st.rerun()
+        
+        # ⏳ THIS IS THE AUTO-ADVANCE LOGIC
+        time.sleep(1.5)  # Wait 1.5 seconds so the user sees the correct/wrong colors
+        
+        st.session_state.q_index += 1
+        st.session_state.answered = False
+        st.session_state.current_options = []
+        st.session_state.user_choice = ""
+        st.rerun()
